@@ -27,7 +27,7 @@
  * See https://spdx.org/licenses/BSD-3-Clause
  *
  */
-#include "fam_rpc_service_impl.h"
+#include "fam_cis_temp.h"
 #include "common/fam_memserver_profile.h"
 #include <thread>
 
@@ -43,25 +43,25 @@ using namespace chrono;
 namespace openfam {
 MEMSERVER_PROFILE_START(RPC_SERVICE)
 #ifdef MEMSERVER_PROFILE
-#define RPC_SERVICE_PROFILE_START_OPS()                                        \
+#define CIS_PROFILE_START_OPS()                                        \
     {                                                                          \
         Profile_Time start = RPC_SERVICE_get_time();
 
-#define RPC_SERVICE_PROFILE_END_OPS(apiIdx)                                    \
+#define CIS_PROFILE_END_OPS(apiIdx)                                    \
     Profile_Time end = RPC_SERVICE_get_time();                                 \
     Profile_Time total = RPC_SERVICE_time_diff_nanoseconds(start, end);        \
     MEMSERVER_PROFILE_ADD_TO_TOTAL_OPS(RPC_SERVICE, prof_##apiIdx, total)      \
     }
-#define RPC_SERVICE_PROFILE_DUMP() rpc_service_profile_dump()
+#define CIS_PROFILE_DUMP() cis_profile_dump()
 #else
-#define RPC_SERVICE_PROFILE_START_OPS()
-#define RPC_SERVICE_PROFILE_END_OPS(apiIdx)
-#define RPC_SERVICE_PROFILE_DUMP()
+#define CIS_PROFILE_START_OPS()
+#define CIS_PROFILE_END_OPS(apiIdx)
+#define CIS_PROFILE_DUMP()
 #endif
 
-void rpc_service_profile_dump() {
-    MEMSERVER_PROFILE_END(RPC_SERVICE);
-    MEMSERVER_DUMP_PROFILE_BANNER(RPC_SERVICE)
+void cis_profile_dump() {
+    MEMSERVER_PROFILE_END(CIS_SERVICE);
+    MEMSERVER_DUMP_PROFILE_BANNER(CIS_SERVICE)
 #undef MEMSERVER_COUNTER
 #define MEMSERVER_COUNTER(name)                                                \
     MEMSERVER_DUMP_PROFILE_DATA(RPC_SERVICE, name, prof_##name)
@@ -73,7 +73,7 @@ void rpc_service_profile_dump() {
 #include "rpc/rpc_service_counters.tbl"
     MEMSERVER_DUMP_PROFILE_SUMMARY(RPC_SERVICE)
 }
-
+#if 0
 void Fam_CIS_temp::progress_thread() {
     if (libfabricProgressMode == FI_PROGRESS_MANUAL) {
         while (1) {
@@ -133,21 +133,24 @@ void Fam_CIS_temp::rpc_service_finalize() {
     famOps->finalize();
 }
 
-
+#endif
 Fam_CIS_temp::Fam_CIS_temp(Memserver_Allocator *memAlloc) {
 	allocator = memAlloc;
 }
 
 Fam_CIS_temp::~Fam_CIS_temp() {
+#if 0
     if (libfabricProgressMode == FI_PROGRESS_MANUAL) {
         haltProgress = true;
         progressThread.join();
     }
     famOps->finalize();
     delete famOps;
+#endif
     delete allocator;
+    delete metadataManager;
 }
-
+#if 0
 ::grpc::Status
 Fam_CIS_temp::signal_start(::grpc::ServerContext *context,
                                    const ::Fam_Request *request,
@@ -183,7 +186,6 @@ Fam_CIS_temp::signal_termination(::grpc::ServerContext *context,
     __sync_add_and_fetch(&numClients, -1);
     return ::grpc::Status::OK;
 }
-
 ::grpc::Status
 Fam_CIS_temp::reset_profile(::grpc::ServerContext *context,
                                     const ::Fam_Request *request,
@@ -195,13 +197,13 @@ Fam_CIS_temp::reset_profile(::grpc::ServerContext *context,
     allocator->reset_profile();
     return ::grpc::Status::OK;
 }
-
+#endif
 void Fam_CIS_temp::dump_profile() {
-    RPC_SERVICE_PROFILE_DUMP();
-    fabric_dump_profile();
-    allocator->dump_profile();
+    CIS_PROFILE_DUMP();
+    //fabric_dump_profile();
+    //allocator->dump_profile();
 }
-
+#if 0
 ::grpc::Status
 Fam_CIS_temp::generate_profile(::grpc::ServerContext *context,
                                        const ::Fam_Request *request,
@@ -212,12 +214,13 @@ Fam_CIS_temp::generate_profile(::grpc::ServerContext *context,
     return ::grpc::Status::OK;
 }
 
+#endif
 void
 Fam_CIS_temp::create_region(string name, uint64_t &regionId, size_t nbytes,
                                     mode_t permission, uint32_t uid, uint32_t gid) {
     CIS_PROFILE_START_OPS()
-    uint64_t regionId;
     Fam_Region_Metadata region;
+    ostringstream message;
 
     // Check if the name size is bigger than MAX_KEY_LEN supported
     if (name.size() > metadataManager->metadata_maxkeylen()) {
@@ -234,9 +237,9 @@ Fam_CIS_temp::create_region(string name, uint64_t &regionId, size_t nbytes,
         allocator->create_region(
             name, regionId, nbytes, permission, uid, gid);
     } catch (Memserver_Exception &e) {
-        response->set_errorcode(e.fam_error());
-        response->set_errormsg(e.fam_error_msg());
-	raise;
+        //response->set_errorcode(e.fam_error());
+        //response->set_errormsg(e.fam_error_msg());
+	throw;
         //return ::grpc::Status::OK;
     }
 
@@ -260,7 +263,7 @@ Fam_CIS_temp::create_region(string name, uint64_t &regionId, size_t nbytes,
 void
 Fam_CIS_temp::destroy_region(uint64_t regionId, uint32_t uid,
                                      uint32_t gid) {
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
     ostringstream message;
 
     // Check with metadata service if the region exist, if not return error
@@ -285,12 +288,13 @@ Fam_CIS_temp::destroy_region(uint64_t regionId, uint32_t uid,
     }
 
     try {
-        allocator->destroy_region(request->regionid(), request->uid(),
-                                  request->gid());
+        allocator->destroy_region(regionId, uid,
+                                  gid);
     } catch (Memserver_Exception &e) {
-        response->set_errorcode(e.fam_error());
-        response->set_errormsg(e.fam_error_msg());
-        return ::grpc::Status::OK;
+	    throw;
+        //response->set_errorcode(e.fam_error());
+        //response->set_errormsg(e.fam_error_msg());
+        //return ::grpc::Status::OK;
     }
 
     // TODO: Validate this
@@ -306,16 +310,17 @@ Fam_CIS_temp::destroy_region(uint64_t regionId, uint32_t uid,
     }
 
 
-    RPC_SERVICE_PROFILE_END_OPS(destroy_region);
+    CIS_PROFILE_END_OPS(destroy_region);
     // Return status OK
-    return ::grpc::Status::OK;
+    return;
 }
 
 void
 Fam_CIS_temp::resize_region(uint64_t regionId, uint32_t uid, uint32_t gid,
                                      size_t nbytes) {
 
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
+    ostringstream message;
 
     // Check with metadata service if the region exist, if not return error
     Fam_Region_Metadata region;
@@ -334,12 +339,12 @@ Fam_CIS_temp::resize_region(uint64_t regionId, uint32_t uid, uint32_t gid,
     }
     
     try {
-        allocator->resize_region(regionid, uid,
-                                 gid, size);
+        allocator->resize_region(regionId, uid,
+                                 gid, nbytes);
     } catch (Memserver_Exception &e) {
         //response->set_errorcode(e.fam_error());
         //response->set_errormsg(e.fam_error_msg());
-        raise;
+        throw;
     }
 
     region.size = nbytes;
@@ -350,11 +355,11 @@ Fam_CIS_temp::resize_region(uint64_t regionId, uint32_t uid, uint32_t gid,
         throw Memserver_Exception(REGION_NOT_MODIFIED, message.str().c_str());
     }
 
-    RPC_SERVICE_PROFILE_END_OPS(resize_region);
+    CIS_PROFILE_END_OPS(resize_region);
 
     // Return status OK
     //return ::grpc::Status::OK;
-    raise;
+    throw;
 }
 
 void
@@ -363,11 +368,8 @@ Fam_CIS_temp::allocate(string name, uint64_t regionId, size_t nbytes,
                                uint32_t uid, uint32_t gid,
 			       Fam_DataItem_Metadata &dataitem,
 			       void *&localPointer) {
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
     ostringstream message;
-    uint64_t offset;
-    uint64_t key;
-    Fam_DataItem_Metadata dataitem;
     //void *localPointer;
     int ret = 0;
 
@@ -378,10 +380,9 @@ Fam_CIS_temp::allocate(string name, uint64_t regionId, size_t nbytes,
                                   message.str().c_str());
     }
 
-    size_t tmpSize;
     // Check with metadata service if the region exist, if not return error
     Fam_Region_Metadata region;
-    int ret = metadataManager->metadata_find_region(regionId, region);
+    ret = metadataManager->metadata_find_region(regionId, region);
     if (ret != META_NO_ERROR) {
         message << "Region does not exist";
         throw Memserver_Exception(REGION_NOT_FOUND, message.str().c_str());
@@ -411,15 +412,15 @@ Fam_CIS_temp::allocate(string name, uint64_t regionId, size_t nbytes,
     }
 	 
         try {
-            allocator->allocate(name, regionid,
-                                request, offset,
-                                request, uid,
+            allocator->allocate(name, regionId,
+                                nbytes, offset,
+                                permission, uid,
                                 gid, dataitem, localPointer);
         } catch (Memserver_Exception &e) {
             //response->set_errorcode(e.fam_error());
             //response->set_errormsg(e.fam_error_msg());            
 	    //return ::grpc::Status::OK;
-	    raise;
+	    throw;
         }
     //}
 
@@ -438,10 +439,8 @@ Fam_CIS_temp::allocate(string name, uint64_t regionId, size_t nbytes,
         ret = metadataManager->metadata_insert_dataitem(dataitemId, regionId,
                                                         &dataitem, name);
     if (ret != META_NO_ERROR) {
-        message << "Can not insert dataitem into metadata service";
-        NVMM_PROFILE_START_OPS()
-        heap->Free(offset);
-        NVMM_PROFILE_END_OPS(Heap_Free)
+        //TODO: Call deallocate
+	message << "Can not insert dataitem into metadata service";
         throw Memserver_Exception(DATAITEM_NOT_INSERTED, message.str().c_str());
     }
 
@@ -452,7 +451,7 @@ Fam_CIS_temp::allocate(string name, uint64_t regionId, size_t nbytes,
 void
 Fam_CIS_temp::deallocate(uint64_t regionId, uint64_t offset,
                                  uint32_t uid, uint32_t gid) {
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
     ostringstream message;
 
     // Check with metadata service if data item with the requested name
@@ -487,16 +486,16 @@ Fam_CIS_temp::deallocate(uint64_t regionId, uint64_t offset,
     }
 
     try {
-        allocator->deallocate(regionid, offset,
+        allocator->deallocate(regionId, offset,
                               uid, gid);
     } catch (Memserver_Exception &e) {
         //response->set_errorcode(e.fam_error());
         //response->set_errormsg(e.fam_error_msg());
         //return ::grpc::Status::OK;
-	raise;
+	throw;
     }
 
-    RPC_SERVICE_PROFILE_END_OPS(deallocate);
+    CIS_PROFILE_END_OPS(deallocate);
 
     // Return status OK
     return;
@@ -505,7 +504,7 @@ Fam_CIS_temp::deallocate(uint64_t regionId, uint64_t offset,
 void Fam_CIS_temp::change_region_permission(
     uint64_t regionId,mode_t permission,
     uint32_t uid, uint32_t gid) {
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
 
     ostringstream message;
     message << "Error While changing region permission : ";
@@ -530,7 +529,7 @@ void Fam_CIS_temp::change_region_permission(
     region.perm = permission;
     ret = metadataManager->metadata_modify_region(regionId, &region);
 
-    RPC_SERVICE_PROFILE_END_OPS(change_region_permission);
+    CIS_PROFILE_END_OPS(change_region_permission);
 
     // Return status OK
     return;
@@ -541,7 +540,7 @@ void Fam_CIS_temp::change_dataitem_permission(uint64_t regionId,
                                               mode_t permission,
                                               uint32_t uid,
                                               uint32_t gid) {
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
     ostringstream message;
     message << "Error While changing dataitem permission : ";
     // Check with metadata service if region with the requested Id
@@ -568,7 +567,7 @@ void Fam_CIS_temp::change_dataitem_permission(uint64_t regionId,
     ret = metadataManager->metadata_modify_dataitem(dataitemId, regionId,
                                                     &dataitem);
 
-    RPC_SERVICE_PROFILE_END_OPS(change_dataitem_permission);
+    CIS_PROFILE_END_OPS(change_dataitem_permission);
     // Return status OK
     return;
 }
@@ -576,9 +575,9 @@ void Fam_CIS_temp::change_dataitem_permission(uint64_t regionId,
 void
 Fam_CIS_temp::lookup_region(string name, uint32_t uid, uint32_t gid,
                                     Fam_Region_Metadata &region) {
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
     ostringstream message;
-    Fam_Region_Metadata region;
+    //Fam_Region_Metadata region;
 
     message << "Error While locating region : ";
     int ret = metadataManager->metadata_find_region(name, region);
@@ -587,11 +586,16 @@ Fam_CIS_temp::lookup_region(string name, uint32_t uid, uint32_t gid,
         throw Memserver_Exception(REGION_NOT_FOUND, message.str().c_str());
     }
 
-    if (uid() != region.uid) {       
-	    check_region_permission(region, 0, uid,
-                                                  gid);
+    if (uid != region.uid) {       
+	          metadata_region_item_op_t opFlag = META_REGION_ITEM_READ;
+        bool isPermitted = metadataManager->metadata_check_permissions(&region, opFlag, uid, gid);
+        if (!isPermitted) {
+            message << "could not find the region " << name;     
+            throw Memserver_Exception(REGION_NOT_FOUND, message.str().c_str());
+        }
+
     }
-    RPC_SERVICE_PROFILE_END_OPS(lookup_region);
+    CIS_PROFILE_END_OPS(lookup_region);
     return ;
 }
 
@@ -599,7 +603,7 @@ void
 Fam_CIS_temp::lookup(string itemName, string regionName,
                      uint32_t uid, uint32_t gid,
                      Fam_DataItem_Metadata &dataitem) {
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
     ostringstream message;
     message << "Error While locating dataitem : ";
     int ret =
@@ -611,17 +615,25 @@ Fam_CIS_temp::lookup(string itemName, string regionName,
     }
 
     if (uid != dataitem.uid) {
-        check_dataitem_permission(dataitem, 0, uid,gid);
+        metadata_region_item_op_t opFlag = META_REGION_ITEM_READ;
+        bool isPermitted = metadataManager->metadata_check_permissions(&dataitem, opFlag, uid, gid);
+	if (!isPermitted) {
+            message << "could not find the dataitem" << itemName << " "
+                    << regionName;
+            throw Memserver_Exception(DATAITEM_NOT_FOUND, message.str().c_str());
+	}
     }
+
+        //check_dataitem_permission(dataitem, 0, uid,gid);
     // Return status OK
-    RPC_SERVICE_PROFILE_END_OPS(lookup);
+    CIS_PROFILE_END_OPS(lookup);
     return;
 }
 
 void Fam_CIS_temp::check_permission_get_region_info(uint64_t regionId,         
                                               uint32_t uid, uint32_t gid) {
 
-    RPC_SERVICE_PROFILE_START_OPS()	  
+    CIS_PROFILE_START_OPS()	  
     Fam_Region_Metadata region; 
     ostringstream message;
     message << "Error While locating region : ";
@@ -630,10 +642,15 @@ void Fam_CIS_temp::check_permission_get_region_info(uint64_t regionId,
         message << "could not find the region";
         throw Memserver_Exception(REGION_NOT_FOUND, message.str().c_str());
     }
-        opFlag = 0
-        metadataManager->metadata_check_permissions(&region, opFlag, uid, gid);
+        metadata_region_item_op_t opFlag = META_REGION_ITEM_READ;
+        ret = metadataManager->metadata_check_permissions(&region, opFlag, uid, gid);
+	if (ret != META_NO_ERROR) {
+        message << "could not find the region" << regionId << " "
+                 << ret;
+        throw Memserver_Exception(REGION_NOT_FOUND, message.str().c_str());
+    }
 
-    RPC_SERVICE_PROFILE_END_OPS(check_permission_get_region_info);
+    CIS_PROFILE_END_OPS(check_permission_get_region_info);
     return;
 }
 
@@ -641,7 +658,7 @@ void Fam_CIS_temp::check_permission_get_item_info(
     uint64_t regionId, uint64_t offset,
     uint32_t uid, uint32_t gid) {
 
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
 
     ostringstream message;
     Fam_DataItem_Metadata dataitem;
@@ -654,10 +671,10 @@ void Fam_CIS_temp::check_permission_get_item_info(
         throw Memserver_Exception(DATAITEM_NOT_FOUND, message.str().c_str());
     }
 
-    RPC_SERVICE_PROFILE_END_OPS(check_permission_get_item_info);
+    CIS_PROFILE_END_OPS(check_permission_get_item_info);
 
     // Return status OK
-    return ::grpc::Status::OK;
+    return; 
 }
 
 #if 0
@@ -812,7 +829,7 @@ int Fam_CIS_temp::deregister_fence_memory() {
 
 int Fam_CIS_temp::deregister_memory(uint64_t regionId,
                                             uint64_t offset) {
-    RPC_SERVICE_PROFILE_START_OPS()
+    CIS_PROFILE_START_OPS()
 
     int ret = 0;
     uint64_t dataitemId = offset / MIN_OBJ_SIZE;
@@ -861,7 +878,7 @@ int Fam_CIS_temp::deregister_memory(uint64_t regionId,
     }
 
     pthread_rwlock_unlock(&fiRegionMap->fiRegionLock);
-    RPC_SERVICE_PROFILE_END_OPS(deregister_memory);
+    CIS_PROFILE_END_OPS(deregister_memory);
     return 0;
 }
 
@@ -910,7 +927,7 @@ int Fam_CIS_temp::deregister_region_memory(uint64_t regionId) {
 #endif
 void
 Fam_CIS_temp::acquire_CAS_lock(uint64_t offset) {
-    int idx = LOCKHASH(offset());
+    int idx = LOCKHASH(offset);
     pthread_mutex_lock(&casLock[idx]);
 
     // Return status OK
@@ -919,11 +936,11 @@ Fam_CIS_temp::acquire_CAS_lock(uint64_t offset) {
 
 void
 Fam_CIS_temp::release_CAS_lock(uint64_t offset) {
-    int idx = LOCKHASH(request->offset());
+    int idx = LOCKHASH(offset);
     pthread_mutex_unlock(&casLock[idx]);
 
     // Return status OK
-    return ::grpc::Status::OK;
+    return;
 }
 
 } // namespace openfam

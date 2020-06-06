@@ -168,7 +168,7 @@ int Memserver_Allocator::create_region(string name, uint64_t &regionId,
     else
         tmpSize = nbytes;
     NVMM_PROFILE_START_OPS()
-    ret = memoryManager->CreateHeap(poolId, tmpSize, MIN_OBJ_SIZE);
+    int ret = memoryManager->CreateHeap(poolId, tmpSize, MIN_OBJ_SIZE);
     NVMM_PROFILE_END_OPS(CreateHeap)
 
     if (ret != NO_ERROR) {
@@ -310,7 +310,7 @@ int Memserver_Allocator::destroy_region(uint64_t regionId, uint32_t uid,
         pthread_mutex_unlock(&heapMapLock);
         NVMM_PROFILE_END_OPS(HeapMapEraseOp)
         NVMM_PROFILE_START_OPS()
-        ret = heap->Close();
+        int ret = heap->Close();
         NVMM_PROFILE_END_OPS(Heap_Close)
         if (ret != NO_ERROR) {
             message << "Can not close heap";
@@ -331,7 +331,7 @@ int Memserver_Allocator::destroy_region(uint64_t regionId, uint32_t uid,
     }
 #endif
     NVMM_PROFILE_START_OPS()
-    ret = memoryManager->DestroyHeap((PoolId)regionId);
+    int ret = memoryManager->DestroyHeap((PoolId)regionId);
     NVMM_PROFILE_END_OPS(DestroyHeap)
     if (ret != NO_ERROR) {
         message << "Can not destroy heap";
@@ -375,7 +375,7 @@ int Memserver_Allocator::resize_region(uint64_t regionId, uint32_t uid,
     HeapMap::iterator it = get_heap(regionId, heap);
 
     if (it == heapMap->end()) {
-        ret = open_heap(regionId);
+        int ret = open_heap(regionId);
         if (ret != ALLOC_NO_ERROR) {
             message << "Opening of heap failed";
             throw Memserver_Exception(HEAP_NOT_OPENED, message.str().c_str());
@@ -390,7 +390,7 @@ int Memserver_Allocator::resize_region(uint64_t regionId, uint32_t uid,
 
     // Call NVMM to resize the heap
     NVMM_PROFILE_START_OPS()
-    ret = heap->Resize(nbytes);
+    int ret = heap->Resize(nbytes);
     NVMM_PROFILE_END_OPS(Heap_Resize)
     if (ret != NO_ERROR) {
         message << "heap resize failed";
@@ -424,6 +424,8 @@ int Memserver_Allocator::allocate(string name, uint64_t regionId, size_t nbytes,
                                   void *&localPointer) {
     ostringstream message;
     message << "Error While allocating dataitem : ";
+    int ret;
+    size_t tmpSize;
 #if 0
     // Check if the name size is bigger than MAX_KEY_LEN supported
     if (name.size() > metadataManager->metadata_maxkeylen()) {
@@ -553,6 +555,7 @@ int Memserver_Allocator::deallocate(uint64_t regionId, uint64_t offset,
                                     uint32_t uid, uint32_t gid) {
     ostringstream message;
     message << "Error While deallocating dataitem : ";
+    int ret;
 #if 0
     // Check with metadata service if data item with the requested name
     // is already exist, if not return error
