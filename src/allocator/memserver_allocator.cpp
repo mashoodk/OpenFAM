@@ -132,11 +132,13 @@ int Memserver_Allocator::create_region(string name, uint64_t &regionId,
     ostringstream message;
     message << "Error While creating region : ";
 
+#if 0
     // Check if the name size is bigger than MAX_KEY_LEN supported
     if (name.size() > metadataManager->metadata_maxkeylen()) {
         message << "Name too long";
         throw Memserver_Exception(REGION_NAME_TOO_LONG, message.str().c_str());
     }
+#endif
 
     // Obtain free regionId from NVMM
     size_t tmpSize;
@@ -147,15 +149,17 @@ int Memserver_Allocator::create_region(string name, uint64_t &regionId,
         message << "No free pool ID";
         throw Memserver_Exception(NO_FREE_POOLID, message.str().c_str());
     }
+#if 0
     // Checking if the region is already exist, if exists return error
     Fam_Region_Metadata region;
-    int ret = metadataManager->metadata_find_region(name, region);
+    int ret = metadataManager->metadata_find_region(name, region);  
     if (ret == META_NO_ERROR) {
         message << "Region already exist";
         // Reset the poolId bit in the bitmap
         bitmap_reset(bmap, poolId);
         throw Memserver_Exception(REGION_EXIST, message.str().c_str());
     }
+#endif
     // Else Create region using NVMM and set the fields in reponse to
     // appropriate value
 
@@ -219,7 +223,7 @@ int Memserver_Allocator::create_region(string name, uint64_t &regionId,
 
     pthread_mutex_unlock(&heapMapLock);
     NVMM_PROFILE_END_OPS(HeapMapInsertOp);
-
+#if 0
     // Register the region into metadata service
     region.regionId = regionId;
     strncpy(region.name, name.c_str(), metadataManager->metadata_maxkeylen());
@@ -256,7 +260,7 @@ int Memserver_Allocator::create_region(string name, uint64_t &regionId,
         }
         throw Memserver_Exception(REGION_NOT_INSERTED, message.str().c_str());
     }
-
+#endif
     return ALLOC_NO_ERROR;
 }
 
@@ -270,6 +274,7 @@ int Memserver_Allocator::destroy_region(uint64_t regionId, uint32_t uid,
                                         uint32_t gid) {
     ostringstream message;
     message << "Error While destroy region : ";
+#if 0
     // Check with metadata service if the region exist, if not return error
     Fam_Region_Metadata region;
     int ret = metadataManager->metadata_find_region(regionId, region);
@@ -290,6 +295,7 @@ int Memserver_Allocator::destroy_region(uint64_t regionId, uint32_t uid,
                                       message.str().c_str());
         }
     }
+#endif
 
     // destroy region using NVMM
     // Even if heap is not found in map, continue with DestroyHeap
@@ -313,6 +319,7 @@ int Memserver_Allocator::destroy_region(uint64_t regionId, uint32_t uid,
         delete heap;
     }
 
+#if 0
     // remove region from metadata service.
     // metadata_delete_region() is called before DestroyHeap() as
     // cached KVS is freed in metadata_delete_region and calling
@@ -322,6 +329,7 @@ int Memserver_Allocator::destroy_region(uint64_t regionId, uint32_t uid,
         message << "Can not remove region from metadata service";
         throw Memserver_Exception(REGION_NOT_REMOVED, message.str().c_str());
     }
+#endif
     NVMM_PROFILE_START_OPS()
     ret = memoryManager->DestroyHeap((PoolId)regionId);
     NVMM_PROFILE_END_OPS(DestroyHeap)
@@ -345,6 +353,7 @@ int Memserver_Allocator::resize_region(uint64_t regionId, uint32_t uid,
                                        uint32_t gid, size_t nbytes) {
     ostringstream message;
     message << "Error while resizing the region";
+#if 0
     // Check with metadata service if the region exist, if not return error
     Fam_Region_Metadata region;
     int ret = metadataManager->metadata_find_region(regionId, region);
@@ -360,7 +369,7 @@ int Memserver_Allocator::resize_region(uint64_t regionId, uint32_t uid,
         throw Memserver_Exception(REGION_RESIZE_NOT_PERMITTED,
                                   message.str().c_str());
     }
-
+#endif
     // Get the heap and open it if not open already
     Heap *heap = 0;
     HeapMap::iterator it = get_heap(regionId, heap);
@@ -387,7 +396,7 @@ int Memserver_Allocator::resize_region(uint64_t regionId, uint32_t uid,
         message << "heap resize failed";
         throw Memserver_Exception(RESIZE_FAILED, message.str().c_str());
     }
-
+#if 0
     region.size = nbytes;
     // Update the size in the metadata service
     ret = metadataManager->metadata_modify_region(regionId, &region);
@@ -395,7 +404,7 @@ int Memserver_Allocator::resize_region(uint64_t regionId, uint32_t uid,
         message << "Can not modify metadata service, ";
         throw Memserver_Exception(REGION_NOT_MODIFIED, message.str().c_str());
     }
-
+#endif
     return ALLOC_NO_ERROR;
 }
 
@@ -415,7 +424,7 @@ int Memserver_Allocator::allocate(string name, uint64_t regionId, size_t nbytes,
                                   void *&localPointer) {
     ostringstream message;
     message << "Error While allocating dataitem : ";
-
+#if 0
     // Check if the name size is bigger than MAX_KEY_LEN supported
     if (name.size() > metadataManager->metadata_maxkeylen()) {
         message << "Name too long";
@@ -454,7 +463,7 @@ int Memserver_Allocator::allocate(string name, uint64_t regionId, size_t nbytes,
             throw Memserver_Exception(DATAITEM_EXIST, message.str().c_str());
         }
     }
-
+#endif
     // Call NVMM to create a new data item
     Heap *heap = 0;
 
@@ -544,6 +553,7 @@ int Memserver_Allocator::deallocate(uint64_t regionId, uint64_t offset,
                                     uint32_t uid, uint32_t gid) {
     ostringstream message;
     message << "Error While deallocating dataitem : ";
+#if 0
     // Check with metadata service if data item with the requested name
     // is already exist, if not return error
     uint64_t dataitemId = offset / MIN_OBJ_SIZE;
@@ -574,6 +584,7 @@ int Memserver_Allocator::deallocate(uint64_t regionId, uint64_t offset,
         message << "Can not remove dataitem from metadata service";
         throw Memserver_Exception(DATAITEM_NOT_REMOVED, message.str().c_str());
     }
+#endif
     // call NVMM to destroy the data item
     Heap *heap = 0;
 
@@ -643,6 +654,7 @@ int Memserver_Allocator::change_dataitem_permission(uint64_t regionId,
                                                     uint32_t gid) {
     ostringstream message;
     message << "Error While changing dataitem permission : ";
+#if 0
     // Check with metadata service if region with the requested Id
     // is already exist, if not return error
     uint64_t dataitemId = offset / MIN_OBJ_SIZE;
@@ -666,6 +678,7 @@ int Memserver_Allocator::change_dataitem_permission(uint64_t regionId,
     dataitem.perm = permission;
     ret = metadataManager->metadata_modify_dataitem(dataitemId, regionId,
                                                     &dataitem);
+#endif
     return ALLOC_NO_ERROR;
 }
 

@@ -38,5 +38,6 @@ set(MEMORYSERVER_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/fam_rpc.grpc.pb.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/fam_rpc.pb.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/fam_rpc_service_impl.cpp
+  #${CMAKE_CURRENT_SOURCE_DIR}/fam_cis_temp.cpp
   PARENT_SCOPE
   )
