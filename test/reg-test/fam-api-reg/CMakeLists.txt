@@ -63,7 +63,7 @@ add_fam_test(fam_nonfetch_logical_atomics_reg_test)
 add_fam_test(fam_nonfetch_min_max_atomics_reg_test)
 add_fam_test(fam_mm_reg_test)
 #add_fam_test(fam_shm_tests)
-add_fam_test(fam_copy_reg_test)
+#add_fam_test(fam_copy_reg_test)
 add_fam_test(fam_put_get_mt_reg_test)
 add_fam_test(fam_scatter_gather_blocking_mt_reg_test)
 

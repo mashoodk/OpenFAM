@@ -27,6 +27,8 @@
  * See https://spdx.org/licenses/BSD-3-Clause
  *
  */
+#ifndef FAM_MEMSERVER_PROFILE_H_
+#define FAM_MEMSERVER_PROFILE_H_
 
 #include <boost/atomic.hpp>
 #include <chrono>
@@ -213,4 +215,5 @@ typedef enum Metadata_Counter_Enum {
 #define MEMSERVER_DUMP_PROFILE_DATA(profile_name, name, apiIdx)
 #define MEMSERVER_PROFILE_TOTAL(profile_name, apiIdx)
 #define MEMSERVER_DUMP_PROFILE_SUMMARY(profile_name)
+#endif
 #endif

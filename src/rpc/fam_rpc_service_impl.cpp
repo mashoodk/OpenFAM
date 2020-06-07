@@ -90,7 +90,7 @@ void Fam_Rpc_Service_Impl::rpc_service_initialize(
     message << "Error while initializing RPC service : ";
     numClients = 0;
     shouldShutdown = false;
-    allocator = memAlloc;
+    allocator = new Fam_CIS_temp(memAlloc);
     MEMSERVER_PROFILE_INIT(RPC_SERVICE)
     MEMSERVER_PROFILE_START_TIME(RPC_SERVICE)
     fiMrs = NULL;
@@ -272,6 +272,7 @@ Fam_Rpc_Service_Impl::resize_region(::grpc::ServerContext *context,
     } catch (Memserver_Exception &e) {
         response->set_errorcode(e.fam_error());
         response->set_errormsg(e.fam_error_msg());
+	std::cout<<"Resize failed :"<<e.fam_error_msg()<<std::endl;
         return ::grpc::Status::OK;
     }
     RPC_SERVICE_PROFILE_END_OPS(resize_region);
@@ -319,6 +320,7 @@ Fam_Rpc_Service_Impl::allocate(::grpc::ServerContext *context,
         } catch (Memserver_Exception &e) {
             response->set_errorcode(e.fam_error());
             response->set_errormsg(e.fam_error_msg());
+	    std::cout<<"Allocate failed... "<<e.fam_error_msg()<<std::endl;
             return ::grpc::Status::OK;
         }
     }

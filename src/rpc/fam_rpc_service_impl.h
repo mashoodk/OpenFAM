@@ -48,6 +48,7 @@
 #include "common/fam_ops_libfabric.h"
 #include "common/fam_options.h"
 #include "common/memserver_exception.h"
+#include "fam_cis_temp.h"
 
 #include <boost/atomic.hpp>
 #include <nvmm/heap.h>
@@ -165,7 +166,8 @@ class Fam_Rpc_Service_Impl : public Fam_Rpc::Service {
 
   protected:
     uint64_t port;
-    Memserver_Allocator *allocator;
+    //Memserver_Allocator *allocator;
+    Fam_CIS_temp *allocator;
     Fam_Ops_Libfabric *famOps;
     int libfabricProgressMode;
     std::thread progressThread;

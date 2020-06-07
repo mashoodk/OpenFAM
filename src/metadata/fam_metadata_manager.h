@@ -54,7 +54,7 @@ using namespace nvmm;
 using namespace std;
 
 namespace metadata {
-
+#define META_DEBUG
 #ifdef META_DEBUG
 #define DEBUG_STDOUT(x, y)                                                     \
     {                                                                          \

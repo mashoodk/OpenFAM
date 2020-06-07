@@ -980,7 +980,8 @@ int FAM_Metadata_Manager::Impl_::metadata_insert_dataitem(
                 dataitemKey.size(), val_buf, val_len);
 
             if (ret != META_NO_ERROR) {
-                DEBUG_STDERR(dataitemName, "FindOrCreate failed");
+                DEBUG_STDERR(dataitemKey.c_str(), "FindOrCreate failed");
+		DEBUG_STDERR(ret,"FindOrCreate failed");
                 return META_ERROR;
             }
         }

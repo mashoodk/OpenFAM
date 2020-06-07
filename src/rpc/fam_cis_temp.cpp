@@ -134,8 +134,15 @@ void Fam_CIS_temp::rpc_service_finalize() {
 }
 
 #endif
+
+void Fam_CIS_temp::memserver_allocator_finalize()
+{
+	allocator->memserver_allocator_finalize();
+}
+
 Fam_CIS_temp::Fam_CIS_temp(Memserver_Allocator *memAlloc) {
 	allocator = memAlloc;
+	metadataManager = FAM_Metadata_Manager::GetInstance();
 }
 
 Fam_CIS_temp::~Fam_CIS_temp() {
@@ -186,22 +193,20 @@ Fam_CIS_temp::signal_termination(::grpc::ServerContext *context,
     __sync_add_and_fetch(&numClients, -1);
     return ::grpc::Status::OK;
 }
-::grpc::Status
-Fam_CIS_temp::reset_profile(::grpc::ServerContext *context,
-                                    const ::Fam_Request *request,
-                                    ::Fam_Response *response) {
-
-    MEMSERVER_PROFILE_INIT(RPC_SERVICE)
-    MEMSERVER_PROFILE_START_TIME(RPC_SERVICE)
-    fabric_reset_profile();
-    allocator->reset_profile();
-    return ::grpc::Status::OK;
-}
 #endif
+void
+Fam_CIS_temp::reset_profile() {
+
+    MEMSERVER_PROFILE_INIT(CIS)
+    MEMSERVER_PROFILE_START_TIME(CIS)
+    allocator->reset_profile();
+    return;
+}
+
 void Fam_CIS_temp::dump_profile() {
     CIS_PROFILE_DUMP();
     //fabric_dump_profile();
-    //allocator->dump_profile();
+    allocator->dump_profile();
 }
 #if 0
 ::grpc::Status
@@ -287,17 +292,6 @@ Fam_CIS_temp::destroy_region(uint64_t regionId, uint32_t uid,
         }
     }
 
-    try {
-        allocator->destroy_region(regionId, uid,
-                                  gid);
-    } catch (Memserver_Exception &e) {
-	    throw;
-        //response->set_errorcode(e.fam_error());
-        //response->set_errormsg(e.fam_error_msg());
-        //return ::grpc::Status::OK;
-    }
-
-    // TODO: Validate this
     // remove region from metadata service.
     // metadata_delete_region() is called before DestroyHeap() as
     // cached KVS is freed in metadata_delete_region and calling
@@ -307,6 +301,16 @@ Fam_CIS_temp::destroy_region(uint64_t regionId, uint32_t uid,
     if (ret != META_NO_ERROR) {
         message << "Can not remove region from metadata service";
         throw Memserver_Exception(REGION_NOT_REMOVED, message.str().c_str());
+    }
+
+    try {
+        allocator->destroy_region(regionId, uid,
+                                  gid);
+    } catch (Memserver_Exception &e) {
+	    throw;
+        //response->set_errorcode(e.fam_error());
+        //response->set_errormsg(e.fam_error_msg());
+        //return ::grpc::Status::OK;
     }
 
 
@@ -440,7 +444,8 @@ Fam_CIS_temp::allocate(string name, uint64_t regionId, size_t nbytes,
                                                         &dataitem, name);
     if (ret != META_NO_ERROR) {
         //TODO: Call deallocate
-	message << "Can not insert dataitem into metadata service";
+	    std::cout<<"metadata_insert_dataitem failed... "<<dataitemId<<" "<<regionId<<" "<<name<<std::endl;
+	message << "Can not insert dataitem into metadata service "<<ret;
         throw Memserver_Exception(DATAITEM_NOT_INSERTED, message.str().c_str());
     }
 
@@ -572,6 +577,40 @@ void Fam_CIS_temp::change_dataitem_permission(uint64_t regionId,
     return;
 }
 
+/*
+ * Check if the given uid/gid has read or rw permissions.
+ */
+bool Fam_CIS_temp::check_region_permission(Fam_Region_Metadata region,
+                                                  bool op, uint32_t uid,
+                                                  uint32_t gid) {
+    metadata_region_item_op_t opFlag;
+    if (op)
+        opFlag = META_REGION_ITEM_RW;
+    else
+        opFlag = META_REGION_ITEM_READ;
+
+    return (
+        metadataManager->metadata_check_permissions(&region, opFlag, uid, gid));
+}
+
+/*
+ * Check if the given uid/gid has read or rw permissions for
+ * a given dataitem.
+ */
+bool Fam_CIS_temp::check_dataitem_permission(
+    Fam_DataItem_Metadata dataitem, bool op, uint32_t uid, uint32_t gid) {
+
+    metadata_region_item_op_t opFlag;
+    if (op)
+        opFlag = META_REGION_ITEM_RW;
+    else
+        opFlag = META_REGION_ITEM_READ;
+
+    return (metadataManager->metadata_check_permissions(&dataitem, opFlag, uid,
+                                                        gid));
+}
+
+
 void
 Fam_CIS_temp::lookup_region(string name, uint32_t uid, uint32_t gid,
                                     Fam_Region_Metadata &region) {
@@ -627,6 +666,80 @@ Fam_CIS_temp::lookup(string itemName, string regionName,
         //check_dataitem_permission(dataitem, 0, uid,gid);
     // Return status OK
     CIS_PROFILE_END_OPS(lookup);
+    return;
+}
+
+/*
+ * Region name lookup given the region name.
+ * Returns the Fam_Region_Metadata for the given name
+ */
+void Fam_CIS_temp::get_region(string name, uint32_t uid, uint32_t gid,
+                                    Fam_Region_Metadata &region) {
+    ostringstream message;
+    message << "Error While locating region : ";
+    int ret = metadataManager->metadata_find_region(name, region);
+    if (ret != META_NO_ERROR) {
+        message << "could not find the region";
+        throw Memserver_Exception(REGION_NOT_FOUND, message.str().c_str());
+    }
+
+    return;
+}
+
+/*
+ * Region name lookup given the region id.
+ * Returns the Fam_Region_Metadata for the given name
+ */
+void Fam_CIS_temp::get_region(uint64_t regionId, uint32_t uid,
+                                    uint32_t gid, Fam_Region_Metadata &region) {
+    ostringstream message;
+    message << "Error While locating region : ";
+    int ret = metadataManager->metadata_find_region(regionId, region);
+    if (ret != META_NO_ERROR) {
+        message << "could not find the region";
+        throw Memserver_Exception(REGION_NOT_FOUND, message.str().c_str());
+    }
+
+    return;
+}
+
+
+/*
+ * dataitem lookup for the given region and dataitem name.
+ * Returns the Fam_Dataitem_Metadata for the given name
+ */
+void Fam_CIS_temp::get_dataitem(string itemName, string regionName,
+                                      uint32_t uid, uint32_t gid,
+                                      Fam_DataItem_Metadata &dataitem) {
+    ostringstream message;
+    message << "Error While locating dataitem : ";
+    int ret =
+        metadataManager->metadata_find_dataitem(itemName, regionName, dataitem);
+    if (ret != META_NO_ERROR) {
+        message << "could not find the dataitem";
+        throw Memserver_Exception(DATAITEM_NOT_FOUND, message.str().c_str());
+    }
+
+    return;
+}
+
+/*
+ * dataitem lookup for the given region name and offset.
+ * Returns the Fam_Dataitem_Metadata for the given name
+ */
+void Fam_CIS_temp::get_dataitem(uint64_t regionId, uint64_t offset,
+                                      uint32_t uid, uint32_t gid,
+                                      Fam_DataItem_Metadata &dataitem) {
+    ostringstream message;
+    message << "Error While locating dataitem : ";
+    uint64_t dataitemId = offset / MIN_OBJ_SIZE;
+    int ret =
+        metadataManager->metadata_find_dataitem(dataitemId, regionId, dataitem);
+    if (ret != META_NO_ERROR) {
+        message << "could not find the dataitem";
+        throw Memserver_Exception(DATAITEM_NOT_FOUND, message.str().c_str());
+    }
+
     return;
 }
 
@@ -925,6 +1038,11 @@ int Fam_CIS_temp::deregister_region_memory(uint64_t regionId) {
     return 0;
 }
 #endif
+
+void *Fam_CIS_temp::get_local_pointer(uint64_t regionId, uint64_t offset) {
+	return allocator->get_local_pointer(regionId, offset);
+}
+
 void
 Fam_CIS_temp::acquire_CAS_lock(uint64_t offset) {
     int idx = LOCKHASH(offset);

@@ -95,13 +95,13 @@ class Fam_CIS_temp {
 		    uint32_t uid, uint32_t gid);
     void check_permission_get_item_info(uint64_t regionId, uint64_t offset,
                                         uint32_t uid, uint32_t gid);
-    void check_region_permission(Fam_Region_Metadata region, bool op,
+    bool check_region_permission(Fam_Region_Metadata region, bool op,
                                  uint32_t uid, uint32_t gid);
     void get_dataitem(string itemName, string regionName, uint32_t uid,
                      uint32_t gid, Fam_DataItem_Metadata &dataitem);
     void get_dataitem(uint64_t regionId, uint64_t offset, uint32_t uid,
                      uint32_t gid, Fam_DataItem_Metadata &dataitem);
-    void check_dataitem_permission(Fam_DataItem_Metadata dataitem, bool op,
+    bool check_dataitem_permission(Fam_DataItem_Metadata dataitem, bool op,
                                    uint32_t uid, uint32_t gid);
     int copy(uint64_t regionId, uint64_t srcOffset, uint64_t srcCopyStart,
              uint64_t destOffset, uint64_t destCopyStart, uint32_t uid,
@@ -109,6 +109,9 @@ class Fam_CIS_temp {
     void acquire_CAS_lock(uint64_t offset);
     void release_CAS_lock(uint64_t offset);
     void dump_profile();
+    void reset_profile();
+    void memserver_allocator_finalize();
+    void *get_local_pointer(uint64_t regionId, uint64_t offset);
   private:
     FAM_Metadata_Manager *metadataManager;
     Memserver_Allocator *allocator;

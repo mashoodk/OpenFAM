@@ -75,7 +75,7 @@ Memserver_Allocator::Memserver_Allocator() {
     StartNVMM();
     heapMap = new HeapMap();
     memoryManager = MemoryManager::GetInstance();
-    metadataManager = FAM_Metadata_Manager::GetInstance();
+    //metadataManager = FAM_Metadata_Manager::GetInstance();
     (void)pthread_mutex_init(&heapMapLock, NULL);
     init_poolId_bmap();
 }
@@ -522,6 +522,7 @@ int Memserver_Allocator::allocate(string name, uint64_t regionId, size_t nbytes,
         localPointer = heap->OffsetToLocal(offset);
         NVMM_PROFILE_END_OPS(Heap_OffsetToLocal)
     }
+#if 0
     uint64_t dataitemId = offset / MIN_OBJ_SIZE;
     dataitem.regionId = regionId;
     strncpy(dataitem.name, name.c_str(), metadataManager->metadata_maxkeylen());
@@ -543,7 +544,7 @@ int Memserver_Allocator::allocate(string name, uint64_t regionId, size_t nbytes,
         NVMM_PROFILE_END_OPS(Heap_Free)
         throw Memserver_Exception(DATAITEM_NOT_INSERTED, message.str().c_str());
     }
-
+#endif
     return ALLOC_NO_ERROR;
 }
 
