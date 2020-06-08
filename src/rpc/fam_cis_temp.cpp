@@ -73,67 +73,6 @@ void cis_profile_dump() {
 #include "rpc/rpc_service_counters.tbl"
     MEMSERVER_DUMP_PROFILE_SUMMARY(RPC_SERVICE)
 }
-#if 0
-void Fam_CIS_temp::progress_thread() {
-    if (libfabricProgressMode == FI_PROGRESS_MANUAL) {
-        while (1) {
-            if (!haltProgress)
-                famOps->quiet();
-            else
-                break;
-        }
-    }
-}
-void Fam_CIS_temp::rpc_service_initialize(
-    char *name, char *service, char *provider, Memserver_Allocator *memAlloc) {
-    ostringstream message;
-    message << "Error while initializing RPC service : ";
-    numClients = 0;
-    shouldShutdown = false;
-    allocator = memAlloc;
-    MEMSERVER_PROFILE_INIT(RPC_SERVICE)
-    MEMSERVER_PROFILE_START_TIME(RPC_SERVICE)
-    fiMrs = NULL;
-    fenceMr = 0;
-
-    famOps =
-        new Fam_Ops_Libfabric(name, service, true, provider,
-                              FAM_THREAD_MULTIPLE, NULL, FAM_CONTEXT_DEFAULT);
-    int ret = famOps->initialize();
-    if (ret < 0) {
-        message << "famOps initialization failed";
-        throw Memserver_Exception(OPS_INIT_FAILED, message.str().c_str());
-    }
-    struct fi_info *fi = famOps->get_fi();
-    if (fi->domain_attr->control_progress == FI_PROGRESS_MANUAL ||
-        fi->domain_attr->data_progress == FI_PROGRESS_MANUAL) {
-        libfabricProgressMode = FI_PROGRESS_MANUAL;
-    }
-    ret = register_fence_memory();
-    if (ret < 0) {
-        message << "Failed to register memory for fence operation";
-        throw Memserver_Exception(FENCE_REG_FAILED, message.str().c_str());
-    }
-    for (int i = 0; i < CAS_LOCK_CNT; i++) {
-        (void)pthread_mutex_init(&casLock[i], NULL);
-    }
-    if (libfabricProgressMode == FI_PROGRESS_MANUAL) {
-        haltProgress = false;
-        progressThread =
-            std::thread(&Fam_CIS_temp::progress_thread, this);
-    }
-}
-
-void Fam_CIS_temp::rpc_service_finalize() {
-    allocator->memserver_allocator_finalize();
-    deregister_fence_memory();
-    for (int i = 0; i < CAS_LOCK_CNT; i++) {
-        (void)pthread_mutex_destroy(&casLock[i]);
-    }
-    famOps->finalize();
-}
-
-#endif
 
 void Fam_CIS_temp::memserver_allocator_finalize()
 {
@@ -146,54 +85,10 @@ Fam_CIS_temp::Fam_CIS_temp(Memserver_Allocator *memAlloc) {
 }
 
 Fam_CIS_temp::~Fam_CIS_temp() {
-#if 0
-    if (libfabricProgressMode == FI_PROGRESS_MANUAL) {
-        haltProgress = true;
-        progressThread.join();
-    }
-    famOps->finalize();
-    delete famOps;
-#endif
     delete allocator;
     delete metadataManager;
 }
-#if 0
-::grpc::Status
-Fam_CIS_temp::signal_start(::grpc::ServerContext *context,
-                                   const ::Fam_Request *request,
-                                   ::Fam_Start_Response *response) {
-    __sync_add_and_fetch(&numClients, 1);
 
-    size_t addrSize = famOps->get_addr_size();
-    void *addr = famOps->get_addr();
-
-    response->set_addrnamelen(addrSize);
-    int count = (int)(addrSize / sizeof(uint32_t));
-    for (int ndx = 0; ndx < count; ndx++) {
-        response->add_addrname(*((uint32_t *)addr + ndx));
-    }
-
-    // Only if addrSize is not multiple of 4 (fixed32)
-    int lastBytesCount = 0;
-    uint32_t lastBytes = 0;
-
-    lastBytesCount = (int)(addrSize % sizeof(uint32_t));
-    if (lastBytesCount > 0) {
-        memcpy(&lastBytes, ((uint32_t *)addr + count), lastBytesCount);
-        response->add_addrname(lastBytes);
-    }
-
-    return ::grpc::Status::OK;
-}
-
-::grpc::Status
-Fam_CIS_temp::signal_termination(::grpc::ServerContext *context,
-                                         const ::Fam_Request *request,
-                                         ::Fam_Response *response) {
-    __sync_add_and_fetch(&numClients, -1);
-    return ::grpc::Status::OK;
-}
-#endif
 void
 Fam_CIS_temp::reset_profile() {
 
@@ -208,18 +103,7 @@ void Fam_CIS_temp::dump_profile() {
     //fabric_dump_profile();
     allocator->dump_profile();
 }
-#if 0
-::grpc::Status
-Fam_CIS_temp::generate_profile(::grpc::ServerContext *context,
-                                       const ::Fam_Request *request,
-                                       ::Fam_Response *response) {
-#ifdef MEMSERVER_PROFILE
-    kill(getpid(), SIGINT);
-#endif
-    return ::grpc::Status::OK;
-}
 
-#endif
 void
 Fam_CIS_temp::create_region(string name, uint64_t &regionId, size_t nbytes,
                                     mode_t permission, uint32_t uid, uint32_t gid) {
@@ -325,7 +209,7 @@ Fam_CIS_temp::resize_region(uint64_t regionId, uint32_t uid, uint32_t gid,
 
     CIS_PROFILE_START_OPS()
     ostringstream message;
-
+    
     // Check with metadata service if the region exist, if not return error
     Fam_Region_Metadata region;
     int ret = metadataManager->metadata_find_region(regionId, region);
@@ -363,7 +247,7 @@ Fam_CIS_temp::resize_region(uint64_t regionId, uint32_t uid, uint32_t gid,
 
     // Return status OK
     //return ::grpc::Status::OK;
-    throw;
+    return;
 }
 
 void
@@ -444,7 +328,6 @@ Fam_CIS_temp::allocate(string name, uint64_t regionId, size_t nbytes,
                                                         &dataitem, name);
     if (ret != META_NO_ERROR) {
         //TODO: Call deallocate
-	    std::cout<<"metadata_insert_dataitem failed... "<<dataitemId<<" "<<regionId<<" "<<name<<std::endl;
 	message << "Can not insert dataitem into metadata service "<<ret;
         throw Memserver_Exception(DATAITEM_NOT_INSERTED, message.str().c_str());
     }
@@ -789,255 +672,6 @@ void Fam_CIS_temp::check_permission_get_item_info(
     // Return status OK
     return; 
 }
-
-#if 0
-::grpc::Status Fam_CIS_temp::copy(::grpc::ServerContext *context,
-                                          const ::Fam_Copy_Request *request,
-                                          ::Fam_Copy_Response *response) {
-    return ::grpc::Status::OK;
-}
-
-uint64_t Fam_CIS_temp::generate_access_key(uint64_t regionId,
-                                                   uint64_t dataitemId,
-                                                   bool permission) {
-    uint64_t key = 0;
-
-    key |= (regionId & REGIONID_MASK) << REGIONID_SHIFT;
-    key |= (dataitemId & DATAITEMID_MASK) << DATAITEMID_SHIFT;
-    key |= permission;
-
-    return key;
-}
-
-int Fam_CIS_temp::register_fence_memory() {
-
-    int ret;
-    fid_mr *mr = 0;
-    uint64_t key = FAM_FENCE_KEY;
-    void *localPointer;
-    size_t len = (size_t)sysconf(_SC_PAGESIZE);
-    int fd = -1;
-
-    localPointer = mmap(NULL, len, PROT_WRITE, MAP_SHARED | MAP_ANON, fd, 0);
-    if (localPointer == MAP_FAILED) {
-    }
-
-    // register the memory location with libfabric
-    if (fenceMr == 0) {
-        ret = fabric_register_mr(localPointer, len, &key, famOps->get_domain(),
-                                 1, mr);
-        if (ret < 0) {
-            cout << "error: memory register failed" << endl;
-            return ITEM_REGISTRATION_FAILED;
-        }
-        fenceMr = mr;
-    }
-    // Return status OK
-    return 0;
-}
-
-int Fam_CIS_temp::register_memory(Fam_DataItem_Metadata dataitem,
-                                          void *&localPointer, uint32_t uid,
-                                          uint32_t gid, uint64_t &key) {
-    uint64_t dataitemId = dataitem.offset / MIN_OBJ_SIZE;
-    if (fiMrs == NULL)
-        fiMrs = famOps->get_fiMrs();
-    fid_mr *mr = 0;
-    int ret = 0;
-    uint64_t mrkey = 0;
-    bool rwflag;
-    Fam_Region_Map_t *fiRegionMap = NULL;
-    Fam_Region_Map_t *fiRegionMapDiscard = NULL;
-
-    if (!localPointer) {
-        localPointer =
-            allocator->get_local_pointer(dataitem.regionId, dataitem.offset);
-    }
-
-    if (allocator->check_dataitem_permission(dataitem, 1, uid, gid)) {
-        key = mrkey = generate_access_key(dataitem.regionId, dataitemId, 1);
-        rwflag = 1;
-    } else if (allocator->check_dataitem_permission(dataitem, 0, uid, gid)) {
-        key = mrkey = generate_access_key(dataitem.regionId, dataitemId, 0);
-        rwflag = 0;
-    } else {
-        cout << "error: Not permitted to register dataitem" << endl;
-        return NOT_PERMITTED;
-    }
-
-    // register the data item with required permission with libfabric
-    // Start by taking a readlock on fiMrs
-    pthread_rwlock_rdlock(famOps->get_mr_lock());
-    auto regionMrObj = fiMrs->find(dataitem.regionId);
-    if (regionMrObj == fiMrs->end()) {
-        // Create a RegionMap
-        fiRegionMap = (Fam_Region_Map_t *)calloc(1, sizeof(Fam_Region_Map_t));
-        fiRegionMap->regionId = dataitem.regionId;
-        fiRegionMap->fiRegionMrs = new std::map<uint64_t, fid_mr *>();
-        pthread_rwlock_init(&fiRegionMap->fiRegionLock, NULL);
-        // RegionMap not found, release read lock, take a write lock
-        pthread_rwlock_unlock(famOps->get_mr_lock());
-        pthread_rwlock_wrlock(famOps->get_mr_lock());
-        // Check again if regionMap added by another thread.
-        regionMrObj = fiMrs->find(dataitem.regionId);
-        if (regionMrObj == fiMrs->end()) {
-            // Add the fam region map into fiMrs
-            fiMrs->insert({dataitem.regionId, fiRegionMap});
-        } else {
-            // Region Map already added by another thread,
-            // discard the one created here.
-            fiRegionMapDiscard = fiRegionMap;
-            fiRegionMap = regionMrObj->second;
-        }
-    } else {
-        fiRegionMap = regionMrObj->second;
-    }
-
-    // Take a writelock on fiRegionMap
-    pthread_rwlock_wrlock(&fiRegionMap->fiRegionLock);
-    // Release lock on fiMrs
-    pthread_rwlock_unlock(famOps->get_mr_lock());
-
-    // Delete the discarded region map here.
-    if (fiRegionMapDiscard != NULL) {
-        delete fiRegionMapDiscard->fiRegionMrs;
-        free(fiRegionMapDiscard);
-    }
-
-    auto mrObj = fiRegionMap->fiRegionMrs->find(key);
-    if (mrObj == fiRegionMap->fiRegionMrs->end()) {
-        ret = fabric_register_mr(localPointer, dataitem.size, &mrkey,
-                                 famOps->get_domain(), rwflag, mr);
-        if (ret < 0) {
-            pthread_rwlock_unlock(&fiRegionMap->fiRegionLock);
-            cout << "error: memory register failed" << endl;
-            return ITEM_REGISTRATION_FAILED;
-        }
-
-        fiRegionMap->fiRegionMrs->insert({key, mr});
-    } else {
-        mrkey = fi_mr_key(mrObj->second);
-    }
-    // Always return mrkey, which might be different than key.
-    key = mrkey;
-
-    pthread_rwlock_unlock(&fiRegionMap->fiRegionLock);
-    // Return status OK
-    return 0;
-}
-
-int Fam_CIS_temp::deregister_fence_memory() {
-
-    int ret = 0;
-    if (fenceMr != 0) {
-        ret = fabric_deregister_mr(fenceMr);
-        if (ret < 0) {
-            cout << "error: memory deregister failed" << endl;
-            return ITEM_DEREGISTRATION_FAILED;
-        }
-    }
-    fenceMr = 0;
-    return 0;
-}
-
-int Fam_CIS_temp::deregister_memory(uint64_t regionId,
-                                            uint64_t offset) {
-    CIS_PROFILE_START_OPS()
-
-    int ret = 0;
-    uint64_t dataitemId = offset / MIN_OBJ_SIZE;
-    uint64_t rKey = generate_access_key(regionId, dataitemId, 0);
-    uint64_t rwKey = generate_access_key(regionId, dataitemId, 1);
-    Fam_Region_Map_t *fiRegionMap;
-
-    if (fiMrs == NULL)
-        fiMrs = famOps->get_fiMrs();
-
-    // Take read lock on fiMrs
-    pthread_rwlock_rdlock(famOps->get_mr_lock());
-    auto regionMrObj = fiMrs->find(regionId);
-    if (regionMrObj == fiMrs->end()) {
-        pthread_rwlock_unlock(famOps->get_mr_lock());
-        return 0;
-    } else {
-        fiRegionMap = regionMrObj->second;
-    }
-
-    // Take a writelock on fiRegionMap
-    pthread_rwlock_wrlock(&fiRegionMap->fiRegionLock);
-    // Release lock on fiMrs
-    pthread_rwlock_unlock(famOps->get_mr_lock());
-
-    auto rMr = fiRegionMap->fiRegionMrs->find(rKey);
-    auto rwMr = fiRegionMap->fiRegionMrs->find(rwKey);
-    if (rMr != fiRegionMap->fiRegionMrs->end()) {
-        ret = fabric_deregister_mr(rMr->second);
-        if (ret < 0) {
-            pthread_rwlock_unlock(&fiRegionMap->fiRegionLock);
-            cout << "error: memory deregister failed" << endl;
-            return ITEM_DEREGISTRATION_FAILED;
-        }
-        fiRegionMap->fiRegionMrs->erase(rMr);
-    }
-
-    if (rwMr != fiRegionMap->fiRegionMrs->end()) {
-        ret = fabric_deregister_mr(rwMr->second);
-        if (ret < 0) {
-            pthread_rwlock_unlock(&fiRegionMap->fiRegionLock);
-            cout << "error: memory deregister failed" << endl;
-            return ITEM_DEREGISTRATION_FAILED;
-        }
-        fiRegionMap->fiRegionMrs->erase(rwMr);
-    }
-
-    pthread_rwlock_unlock(&fiRegionMap->fiRegionLock);
-    CIS_PROFILE_END_OPS(deregister_memory);
-    return 0;
-}
-
-int Fam_CIS_temp::deregister_region_memory(uint64_t regionId) {
-    int ret = 0;
-    Fam_Region_Map_t *fiRegionMap;
-
-    if (fiMrs == NULL)
-        fiMrs = famOps->get_fiMrs();
-
-    // Take write lock on fiMrs
-    pthread_rwlock_wrlock(famOps->get_mr_lock());
-
-    auto regionMrObj = fiMrs->find(regionId);
-    if (regionMrObj == fiMrs->end()) {
-        pthread_rwlock_unlock(famOps->get_mr_lock());
-        return 0;
-    } else {
-        fiRegionMap = regionMrObj->second;
-    }
-
-    // Take a writelock on fiRegionMap
-    pthread_rwlock_wrlock(&fiRegionMap->fiRegionLock);
-    // Remove region map from fiMrs
-    fiMrs->erase(regionMrObj);
-    // Release lock on fiMrs
-    pthread_rwlock_unlock(famOps->get_mr_lock());
-
-    // Unregister all dataItem memory from region map
-    for (auto mr : *(fiRegionMap->fiRegionMrs)) {
-        ret = fabric_deregister_mr(mr.second);
-        if (ret < 0) {
-            cout << "destroy region<" << fiRegionMap->regionId
-                 << ">: memory deregister failed with errno(" << ret << ")"
-                 << endl;
-        }
-    }
-
-    pthread_rwlock_unlock(&fiRegionMap->fiRegionLock);
-    fiRegionMap->fiRegionMrs->clear();
-    delete fiRegionMap->fiRegionMrs;
-    free(fiRegionMap);
-
-    return 0;
-}
-#endif
 
 void *Fam_CIS_temp::get_local_pointer(uint64_t regionId, uint64_t offset) {
 	return allocator->get_local_pointer(regionId, offset);

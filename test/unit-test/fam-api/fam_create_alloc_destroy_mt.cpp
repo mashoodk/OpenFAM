@@ -53,7 +53,7 @@ void *thr_func1(void *arg) {
     my_fam = new fam();
     memset((void *)&fam_opts, 0, sizeof(Fam_Options));
 
-    fam_opts.allocator = strdup("NVMM");
+    //fam_opts.allocator = strdup("NVMM");
     fam_opts.runtime = strdup("NONE");
 
     if (my_fam->fam_initialize("default", &fam_opts) < 0) {
@@ -119,7 +119,7 @@ int main() {
     my_fam = new fam();
     memset((void *)&fam_opts, 0, sizeof(Fam_Options));
 
-    fam_opts.allocator = strdup("NVMM");
+    //fam_opts.allocator = strdup("NVMM");
     fam_opts.runtime = strdup("NONE");
 
     if (my_fam->fam_initialize("default", &fam_opts) < 0) {
