@@ -29,4 +29,5 @@ endfunction()
 
 #add tests
 add_fam_test(fam_metadata_test)
+add_fam_test(fam_metadata_regionid_test)
 #add_fam_test(fam_metadata_regress_test)

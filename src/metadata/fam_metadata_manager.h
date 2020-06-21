@@ -128,6 +128,7 @@ typedef enum metadata_region_item_op {
 } metadata_region_item_op_t;
 
 enum metadata_ErrorVal {
+    META_NO_FREE_REGIONID = -4,
     META_KEY_ALREADY_EXIST = -3,
     META_KEY_DOES_NOT_EXIST = -2,
     META_ERROR = -1,
@@ -216,6 +217,8 @@ class FAM_Metadata_Manager {
                                     metadata_region_item_op_t op, uint64_t uid,
                                     uint64_t gid);
     size_t metadata_maxkeylen();
+    int metadata_get_RegionID(uint64_t *regionID);
+    int metadata_reset_RegionID(uint64_t regionID);
 
     FAM_Metadata_Manager(bool use_meta_reg);
     ~FAM_Metadata_Manager();

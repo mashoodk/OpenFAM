@@ -42,7 +42,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "bitmap-manager/bitmap.h"
 #include "common/fam_memserver_profile.h"
+#include "common/fam_internal.h"
 
 #define OPEN_METADATA_KVS(root, heap_size, heap_id, kvs)                       \
     if (use_meta_region) {                                                     \
@@ -193,6 +195,9 @@ class FAM_Metadata_Manager::Impl_ {
 
     size_t metadata_maxkeylen();
 
+    int metadata_get_RegionID(uint64_t *regionID);
+    int metadata_reset_RegionID(uint64_t regionid);
+
   private:
     // KVS for region Id tree
     KeyValueStore *regionIdKVS;
@@ -202,6 +207,7 @@ class FAM_Metadata_Manager::Impl_ {
     GlobalPtr regionIdRoot;
     // KVS root pointer for region Name tree
     GlobalPtr regionNameRoot;
+    bitmap *bmap;
 
     bool use_meta_region;
     KvsMap *metadataKvsMap;
@@ -227,6 +233,8 @@ class FAM_Metadata_Manager::Impl_ {
 
     int get_regionid_from_regionname_KVS(const std::string regionName,
                                          std::string &regionId);
+
+    void init_poolId_bmap();
 };
 
 /*
@@ -274,6 +282,8 @@ int FAM_Metadata_Manager::Impl_::Init(bool use_meta_reg) {
         DEBUG_STDERR("Metadata Init", "KVS creation failed.");
         return META_ERROR;
     }
+    // Initialize bitmap
+    init_poolId_bmap();
 
     return META_NO_ERROR;
 }
@@ -287,6 +297,18 @@ int FAM_Metadata_Manager::Impl_::Final() {
 
     return META_NO_ERROR;
 }
+
+/*
+ * Initalize the region Id bitmap address.
+ * Size of bitmap is Max poolId's supported / 8 bytes.
+ * Get the Bitmap address reserved from the root shelf.
+ */
+void FAM_Metadata_Manager::Impl_::init_poolId_bmap() {
+    bmap = new bitmap();
+    bmap->size = (ShelfId::kMaxPoolCount * BITSIZE) / sizeof(uint64_t);
+    bmap->map = memoryManager->GetRegionIdBitmapAddr();
+}
+
 
 /**
  * create_metadata_kvs_tree - Helper function to create a KVS radixtree
@@ -1900,6 +1922,20 @@ size_t FAM_Metadata_Manager::Impl_::metadata_maxkeylen() {
     return regionNameKVS->MaxKeyLen();
 }
 
+int FAM_Metadata_Manager::Impl_::metadata_get_RegionID (uint64_t *regionID) {
+    // Find the first free bit after 10th bit in poolId bitmap.
+    // First 10 nvmm ID will be reserved.
+    *regionID = bitmap_find_and_reserve(bmap, 0, MEMSERVER_REGIONID_START);
+    if (*regionID == (uint64_t)BITMAP_NOTFOUND)
+        return META_NO_FREE_REGIONID;
+
+    return META_NO_ERROR;
+}
+
+int FAM_Metadata_Manager::Impl_::metadata_reset_RegionID (uint64_t regionID) {
+     bitmap_reset(bmap, regionID);
+     return META_NO_ERROR;
+}
 /*
  * Public APIs of FAM_Metadata_Manager
  */
@@ -2181,6 +2217,22 @@ size_t FAM_Metadata_Manager::metadata_maxkeylen() {
     METADATA_PROFILE_START_OPS()
     ret = pimpl_->metadata_maxkeylen();
     METADATA_PROFILE_END_OPS(metadata_maxkeylen);
+    return ret;
+}
+int FAM_Metadata_Manager::metadata_reset_RegionID(uint64_t regionid) {
+    int ret;
+    METADATA_PROFILE_START_OPS()
+    ret = pimpl_->metadata_reset_RegionID(regionid);
+    METADATA_PROFILE_END_OPS(metadata_reset_RegionID);
+    return ret;
+
+}
+
+int FAM_Metadata_Manager::metadata_get_RegionID(uint64_t *regionid) {
+    int ret;
+    METADATA_PROFILE_START_OPS()
+    ret = pimpl_->metadata_get_RegionID(regionid);
+    METADATA_PROFILE_END_OPS(metadata_get_RegionID);
     return ret;
 }
 
